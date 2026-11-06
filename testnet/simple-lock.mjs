@@ -30,9 +30,14 @@ await waitCommitted(fundHash);
 const { script: toLock } = await signerOf(toN).getRecommendedAddressObj();
 async function unlockWith(secret) {
   const reader = new ccc.SignerCkbScriptReadonly(client, hashLock);
-  const tx = ccc.Transaction.from({ outputs: [{ lock: toLock }], outputsData: ["0x"] });
+  // Spend ONLY the cell funded above. A known preimage gives a lock address anyone can
+  // share, so collecting every cell at that address would sweep other people's deposits.
+  const tx = ccc.Transaction.from({
+    inputs: [{ previousOutput: { txHash: fundHash, index: 0 } }],
+    outputs: [{ lock: toLock }],
+    outputsData: ["0x"],
+  });
   await tx.addCellDeps(ccc.CellDep.from(contract.cellDeps[0].cellDep), ccc.CellDep.from(jsVm.cellDeps[0].cellDep));
-  await tx.completeInputsAll(reader);
   tx.setWitnessArgsAt(0, ccc.WitnessArgs.from({ lock: bytes(secret) }));
   await tx.completeFeeChangeToOutput(reader, 0, 1000);
   return client.sendTransaction(tx);
